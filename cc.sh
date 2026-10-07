@@ -15,7 +15,7 @@ fi
 GO_BASE="$ZEN_BASE/go/v1"
 
 compose() {
-  ensure_local_secrets
+  update_env </dev/null
   docker compose --project-directory "$DIR" -f "$DIR/docker-compose.yml" "$@"
 }
 
@@ -44,29 +44,52 @@ Examples:
 EOF
 }
 
-set_env_var() {
-  local k="$1" v="$2"
-  python3 - "$ENV_FILE" "$k" "$v" <<'PY'
-import os, sys
-path, key, value = sys.argv[1:]
-lines = []
-if os.path.exists(path):
-    lines = open(path).read().splitlines()
-found = False
-out = []
-for line in lines:
-    if line.startswith(key + "="):
-        out.append(f"{key}={value}")
-        found = True
-    else:
-        out.append(line)
-if not found:
-    out.append(f"{key}={value}")
-fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-os.fchmod(fd, 0o600)
-with os.fdopen(fd, "w") as f:
-    f.write("\n".join(out) + "\n")
-PY
+# The only writer of .env. Takes KEY=VALUE lines on stdin (kept out of argv),
+# fills generated values that are missing, and replaces the file in one step
+# under a lock, so an interrupt or a second cc.sh cannot lose or fork a key.
+update_env() {
+  python3 -c '
+import fcntl, os, secrets, sys, tempfile, uuid
+
+path = sys.argv[1]
+# key: (make a value, values that count as missing)
+GENERATED = {
+    "OPENCODE_SESSION_ID": (lambda: str(uuid.uuid4()), {""}),
+    "LITELLM_MASTER_KEY": (lambda: "sk-local-" + secrets.token_hex(12), {"", "sk-local-change-me"}),
+    "LITELLM_CLIENT_KEY": (lambda: "sk-local-" + secrets.token_hex(12), {""}),
+}
+updates = dict(line.split("=", 1) for line in sys.stdin.read().splitlines() if line)
+
+with open(path + ".lock", "a") as lock:
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    lines = open(path).read().splitlines() if os.path.exists(path) else []
+    current = {}
+    for line in lines:
+        if "=" in line and not line.startswith("#"):
+            k, v = line.split("=", 1)
+            current[k] = v
+    for key, (make, missing) in GENERATED.items():
+        if key not in updates and current.get(key, "") in missing:
+            updates[key] = make()
+    updates = {k: v for k, v in updates.items() if current.get(k) != v}
+    if not updates:
+        sys.exit()
+    out, seen = [], set()
+    for line in lines:
+        key = line.split("=", 1)[0]
+        if "=" in line and key in updates:
+            out.append(f"{key}={updates[key]}")
+            seen.add(key)
+        else:
+            out.append(line)
+    out += [f"{k}={v}" for k, v in updates.items() if k not in seen]
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".env.tmp.")
+    with os.fdopen(fd, "w") as f:
+        f.write("\n".join(out) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+' "$ENV_FILE"
 }
 
 env_value() { sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null | tail -1; }
@@ -75,24 +98,8 @@ set_key() {
   local key
   read -rsp "OpenCode API key: " key; echo
   [ -n "$key" ] || { echo "No key entered." >&2; exit 1; }
-  set_env_var OPENCODE_API_KEY "$key"
+  printf 'OPENCODE_API_KEY=%s\n' "$key" | update_env
   echo "Saved to $ENV_FILE"
-}
-
-random_key() { echo "sk-local-$(head -c12 /dev/urandom | od -An -tx1 | tr -d ' \n')"; }
-
-# Values compose needs that are local to this install. Generated once, then kept.
-#   OPENCODE_SESSION_ID  x-opencode-session header; OpenCode Go rejects requests without it
-#   LITELLM_MASTER_KEY   full proxy access, for the host only
-#   LITELLM_CLIENT_KEY   model routes only, for the claude container (litellm/client_auth.py)
-ensure_local_secrets() {
-  [ -n "$(env_value OPENCODE_SESSION_ID)" ] ||
-    set_env_var OPENCODE_SESSION_ID "$(python3 -c 'import uuid; print(uuid.uuid4())')"
-  local master; master="$(env_value LITELLM_MASTER_KEY)"
-  if [ -z "$master" ] || [ "$master" = sk-local-change-me ]; then
-    set_env_var LITELLM_MASTER_KEY "$(random_key)"
-  fi
-  [ -n "$(env_value LITELLM_CLIENT_KEY)" ] || set_env_var LITELLM_CLIENT_KEY "$(random_key)"
 }
 
 ensure_setup() {
@@ -104,6 +111,9 @@ ensure_setup() {
   built="$(docker image inspect -f '{{index .Config.Labels "claude-sandbox.uid"}}' claude-code 2>/dev/null || true)"
   if [ "$built" != "${HOST_UID:-1000}:${HOST_GID:-1000}" ]; then
     compose build claude
+    # Named volumes keep the owner they had when Docker created them
+    WORKSPACE= compose --progress quiet run --rm --no-deps -T --user root --entrypoint chown \
+      claude -R node:node /home/node/.claude /home/node/workspace
   fi
 }
 
@@ -130,7 +140,7 @@ opencode_models() { curl -fsS -m 20 "$1/models" | jq -r '.data[].id'; }
 configured_models() { sed -n 's/^  - model_name: //p' "$CONFIG"; }
 
 require_model() {
-  configured_models | grep -qx "$1" || {
+  configured_models | grep -Fqx "$1" || {
     echo "Unknown model '$1'. Configured models:" >&2
     configured_models | sed 's/^/  /' >&2
     exit 1
@@ -172,7 +182,7 @@ case "$cmd" in
     require_model "$model"
     start_proxy
     echo "Asking $model..."
-    compose --progress quiet run --rm -T -e "ANTHROPIC_MODEL=$model" claude -p "Reply with exactly: hello from $model" 2>&1 \
+    WORKSPACE= compose --progress quiet run --rm -T -e "ANTHROPIC_MODEL=$model" claude -p "Reply with exactly: hello from $model" 2>&1 \
       | { grep -v -e unrecognized_model -e 'auto mode' -e "isn't described by" || true; }
     ;;
   models)
@@ -184,8 +194,11 @@ case "$cmd" in
     ;;
   add)
     [ $# -eq 2 ] || { echo "Usage: $(basename "$0") add <alias> <opencode-id>" >&2; exit 1; }
-    alias="$1" id="$2"
-    if configured_models | grep -qx "$alias"; then
+    alias="$1" id="$2" valid='^[A-Za-z0-9._-]+$'
+    [[ $alias =~ $valid && $id =~ $valid ]] || {
+      echo "Alias and id may only use letters, digits, '.', '_' and '-'." >&2; exit 1
+    }
+    if configured_models | grep -Fqx "$alias"; then
       echo "Model '$alias' already exists." >&2; exit 1
     fi
     if [[ "$id" == claude-* ]]; then
