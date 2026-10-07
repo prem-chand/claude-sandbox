@@ -115,7 +115,7 @@ Configured models:
 
 ### .env (used by docker compose and cc.sh)
 
-Docker Compose reads `.env` automatically. Copy it from `.env.example`.
+Docker Compose reads `.env` automatically. Copy it from `.env.example`. `cc.sh` writes `.env` with mode `600`, so other users on the machine cannot read your key.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
@@ -127,6 +127,7 @@ Docker Compose reads `.env` automatically. Copy it from `.env.example`.
 | `SONNET_MODEL` | No | `deepseek-v4-pro` | Model used when Claude Code asks for Sonnet. |
 | `HAIKU_MODEL` | No | `deepseek-v4.1-flash` | Model used for Claude Code's small background tasks. |
 | `SUBAGENT_MODEL` | No | `deepseek-v4-pro` | Model used by subagents. |
+| `HOST_UID`, `HOST_GID` | No | `1000` | User and group the image runs as. On Linux, `cc.sh` sets them to your own ids and rebuilds the image when they change, so workspace files keep your ownership. With plain `docker compose` on Linux, set them yourself. If you used an older image with another uid, run `cc.sh stop` and `docker volume rm claude-sandbox_claude-config` once. |
 | `WORKSPACE` | No | empty `claude-workspace` volume | Folder mounted into the container with plain `docker compose` and `cc.sh test`. `cc.sh run` and `cc.sh shell` ignore it and mount the folder you run them from. Do not set it to this repo. |
 
 Model values must be aliases from `litellm/config.yaml`. Values must not be quoted.
@@ -154,7 +155,7 @@ docker run -it --rm \
 | File | Purpose |
 | --- | --- |
 | `cc.sh` | Helper script for everything above. |
-| `Dockerfile` | `claude-code` image: Node 22, Claude Code CLI, git, ripgrep, jq. Runs as the non-root `node` user. |
+| `Dockerfile` | `claude-code` image: Node 22, Claude Code CLI, git, ripgrep, jq. Runs as the non-root `node` user, with your uid on Linux. |
 | `docker-compose.yml` | The `litellm` proxy and `claude` services. |
 | `litellm/config.yaml` | Proxy model list and settings. |
 | `.env.example` | Template for `.env`. |

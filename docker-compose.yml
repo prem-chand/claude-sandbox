@@ -18,7 +18,11 @@ services:
       retries: 30
 
   claude:
-    build: .
+    build:
+      context: .
+      args:
+        UID: ${HOST_UID:-1000}
+        GID: ${HOST_GID:-1000}
     image: claude-code
     stdin_open: true
     tty: true

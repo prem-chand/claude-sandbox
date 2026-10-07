@@ -7,6 +7,11 @@ CONFIG="$DIR/litellm/config.yaml"
 ENV_FILE="$DIR/.env"
 CALLER_PWD="$(pwd -P)"
 ZEN_BASE="https://opencode.ai/zen"
+
+# The image runs as uid 1000 unless the host is Linux with another non-root uid.
+if [ "$(uname -s)" = Linux ] && [ "$(id -u)" != 0 ]; then
+  export HOST_UID="$(id -u)" HOST_GID="$(id -g)"
+fi
 GO_BASE="$ZEN_BASE/go/v1"
 
 compose() {
@@ -57,7 +62,9 @@ for line in lines:
         out.append(line)
 if not found:
     out.append(f"{key}={value}")
-with open(path, "w") as f:
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+os.fchmod(fd, 0o600)
+with os.fdopen(fd, "w") as f:
     f.write("\n".join(out) + "\n")
 PY
 }
@@ -87,7 +94,9 @@ ensure_setup() {
   if [ -z "$master" ] || [ "$master" = sk-local-change-me ]; then
     set_env_var LITELLM_MASTER_KEY "sk-local-$(head -c12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   fi
-  if ! docker image inspect claude-code >/dev/null 2>&1; then
+  local built
+  built="$(docker image inspect -f '{{index .Config.Labels "claude-sandbox.uid"}}' claude-code 2>/dev/null || true)"
+  if [ "$built" != "${HOST_UID:-1000}:${HOST_GID:-1000}" ]; then
     compose build claude
   fi
 }
@@ -158,7 +167,7 @@ case "$cmd" in
     start_proxy
     echo "Asking $model..."
     compose --progress quiet run --rm -T -e "ANTHROPIC_MODEL=$model" claude -p "Reply with exactly: hello from $model" 2>&1 \
-      | grep -v -e unrecognized_model -e 'auto mode' -e "isn't described by"
+      | { grep -v -e unrecognized_model -e 'auto mode' -e "isn't described by" || true; }
     ;;
   models)
     configured_models
