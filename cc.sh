@@ -36,27 +36,40 @@ EOF
 
 set_env_var() {
   local k="$1" v="$2"
-  touch "$ENV_FILE"
-  if grep -q "^$k=" "$ENV_FILE"; then
-    sed -i "s|^$k=.*|$k=$v|" "$ENV_FILE"
-  else
-    printf '%s=%s\n' "$k" "$v" >>"$ENV_FILE"
-  fi
+  python3 - "$ENV_FILE" "$k" "$v" <<'PY'
+import os, sys
+path, key, value = sys.argv[1:]
+lines = []
+if os.path.exists(path):
+    lines = open(path).read().splitlines()
+found = False
+out = []
+for line in lines:
+    if line.startswith(key + "="):
+        out.append(f"{key}={value}")
+        found = True
+    else:
+        out.append(line)
+if not found:
+    out.append(f"{key}={value}")
+with open(path, "w") as f:
+    f.write("\n".join(out) + "\n")
+PY
 }
 
 env_value() { sed -n "s/^$1=//p" "$ENV_FILE" 2>/dev/null | tail -1; }
 
 set_key() {
   local key
-  read -rsp "Command Code API key: " key; echo
+  read -rsp "OpenCode API key: " key; echo
   [ -n "$key" ] || { echo "No key entered." >&2; exit 1; }
-  set_env_var COMMANDCODE_API_KEY "$key"
+  set_env_var OPENCODE_API_KEY "$key"
   echo "Saved to $ENV_FILE"
 }
 
 ensure_setup() {
-  local key; key="$(env_value COMMANDCODE_API_KEY)"
-  if [ -z "$key" ] || [ "$key" = your-command-code-key ]; then
+  local key; key="$(env_value OPENCODE_API_KEY)"
+  if [ -z "$key" ] || [ "$key" = your-opencode-key ] || [ "$key" = your-command-code-key ]; then
     set_key
   fi
   local master; master="$(env_value LITELLM_MASTER_KEY)"

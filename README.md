@@ -13,7 +13,7 @@ claude container  ──/v1/messages──▶  litellm proxy  ──/chat/comple
 
 - Docker with Compose v2 (`docker compose version`)
 - A Command Code API key
-- For some `cc.sh` commands: `curl`, `jq` and `column` (`available`), and `python3` (`add` and `remove`)
+- For some `cc.sh` commands: `curl`, `jq` and `column` (`available`), and `python3` (`add`, `remove`, and writes to `.env`)
 
 ## Quick start
 
@@ -28,11 +28,11 @@ cp .env.example .env
 
 If you skip the `.env` step, `cc.sh` asks for the key on first run, saves it to `.env` and generates the proxy password for you. The first run also builds the `claude-code` image.
 
-To call the script from any folder, link it onto your `PATH`:
+To call the script from any folder, link it onto your `PATH` as `ccs`. Do not name the link `cc`. On macOS and Linux, `cc` is the C compiler (`clang` or `gcc`).
 
 ```bash
-ln -s ~/projects/claude-sandbox/cc.sh ~/.local/bin/cc
-cd ~/some/project && cc
+ln -sf ~/projects/claude-sandbox/cc.sh ~/.local/bin/ccs
+cd ~/some/project && ccs
 ```
 
 ## Using cc.sh
@@ -164,3 +164,58 @@ Claude Code's settings, login state and history live in the `claude-config` Dock
 - **`is not available on this endpoint`**: the model does not support the endpoint the proxy used. Check `cc.sh available`, and check that `use_chat_completions_url_for_anthropic_messages: true` is still in `litellm/config.yaml`.
 - **`Unknown model`** from `cc.sh`: the alias is not in `litellm/config.yaml`. Run `cc.sh models`, or add it with `cc.sh add`.
 - **Any other proxy error**: run `cc.sh logs` to see the full upstream response.
+
+## Gotchas
+
+### `clang: error: no input files` from `cc`
+
+macOS and Linux already ship `cc` as the C compiler (`/usr/bin/cc`). A link named `cc` either loses to `/usr/bin/cc` or replaces the compiler.
+
+Use `ccs` (see Quick start). If you linked `cc` while a shell was open, that shell can keep a hashed path to clang. Run `rehash`, then call `ccs`.
+
+### Host projects
+
+`cc.sh` mounts only the directory you run it from, at `/home/node/workspace`. Claude Code cannot see other host folders.
+
+To work on a project, `cd` into that project and run `ccs` or `./cc.sh`. `cc.sh shell` from this repo mounts this repo, not your other work.
+
+### `/plugin marketplace add owner/repo` fails in the container
+
+Typical errors:
+
+```
+Cloning into '.../owner-repo..clone'...
+.../owner-repo..clone/.git/: No such file or directory
+
+fatal: destination path '.../owner-repo..clone' already exists and is not an empty directory.
+```
+
+Claude Code clones the marketplace through its git sandbox to `~/.claude/plugins/marketplaces/<owner>-<repo>.<ref>.clone`. An empty ref becomes `..clone`. That sandbox cannot create `.git` in this image. The SSH retry uses the leftover directory. The container has no SSH keys.
+
+Clone the marketplace yourself, then register it. Example for pstack:
+
+```bash
+docker ps --filter ancestor=claude-code --format '{{.Names}}'
+
+docker exec -u node CONTAINER git clone --depth 1 \
+  https://github.com/michael-denyer/pstack-claude.git \
+  /home/node/.claude/plugins/marketplaces/pstack-claude
+```
+
+Add a `pstack-claude` entry to `/home/node/.claude/plugins/known_marketplaces.json` with `installLocation` set to that path. Enable the plugin in `/home/node/.claude/settings.json` under `enabledPlugins` (`pstack@pstack-claude`: true). Copy `plugins/pstack` from the clone into `/home/node/.claude/plugins/cache/pstack-claude/pstack/<version>/` if you want it loaded without `/plugin install`. Restart Claude Code.
+
+Do not run `/plugin marketplace add` in this container. Remove leftover `*.clone` directories under `/home/node/.claude/plugins/marketplaces/` after a failed add.
+
+### `400` missing `x-opencode-session`
+
+OpenCode Go requires an `x-opencode-session` header on every request. Claude Code sends `X-Claude-Code-Session-Id`. LiteLLM calls Go as an OpenAI client and drops that header, so Go returns 400.
+
+On each Go model in `litellm/config.yaml`, set:
+
+```yaml
+extra_headers:
+  x-opencode-session: <stable-uuid>
+  User-Agent: claude-sandbox/1.0
+```
+
+Then run `cc.sh restart`. A static id unblocks the 400. Go uses the id for routing and prompt cache. One id per conversation is better. This proxy does not map Claude's session header yet.

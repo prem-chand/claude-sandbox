@@ -1,53 +1,80 @@
-# Claude Code speaks the Anthropic /v1/messages API; LiteLLM translates it to
-# Command Code's OpenAI-style /chat/completions for the non-Claude models.
+# Session overlay: OpenCode Go for coding models; Zen for Claude and Ling.
+# Claude Code speaks Anthropic /v1/messages; LiteLLM translates to OpenCode.
+#
+# OpenCode Go requires x-opencode-session on the wire. Claude Code sends
+# X-Claude-Code-Session-Id, but LiteLLM's OpenAI client drops it, so Go
+# returns 400. Stamp a stable session id and a non-generic User-Agent here.
+
 model_list:
   - model_name: deepseek-v4-pro
     litellm_params:
-      model: openai/deepseek/deepseek-v4-pro
-      api_base: https://api.commandcode.ai/provider/v1
-      api_key: os.environ/COMMANDCODE_API_KEY
+      model: openai/deepseek-v4-pro
+      api_base: https://opencode.ai/zen/go/v1
+      api_key: os.environ/OPENCODE_API_KEY
+      extra_headers:
+        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
+        User-Agent: claude-sandbox/1.0
   - model_name: deepseek-v4-flash
     litellm_params:
-      model: openai/deepseek/deepseek-v4-flash
-      api_base: https://api.commandcode.ai/provider/v1
-      api_key: os.environ/COMMANDCODE_API_KEY
+      model: openai/deepseek-v4-flash
+      api_base: https://opencode.ai/zen/go/v1
+      api_key: os.environ/OPENCODE_API_KEY
+      extra_headers:
+        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
+        User-Agent: claude-sandbox/1.0
   - model_name: deepseek-v4.1-flash
     litellm_params:
-      model: openai/deepseek/deepseek-v4.1-flash
-      api_base: https://api.commandcode.ai/provider/v1
-      api_key: os.environ/COMMANDCODE_API_KEY
+      model: openai/deepseek-v4.1-flash
+      api_base: https://opencode.ai/zen/go/v1
+      api_key: os.environ/OPENCODE_API_KEY
+      extra_headers:
+        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
+        User-Agent: claude-sandbox/1.0
   - model_name: kimi-k3
     litellm_params:
-      model: openai/moonshotai/Kimi-K3
-      api_base: https://api.commandcode.ai/provider/v1
-      api_key: os.environ/COMMANDCODE_API_KEY
+      model: openai/kimi-k3
+      api_base: https://opencode.ai/zen/go/v1
+      api_key: os.environ/OPENCODE_API_KEY
+      extra_headers:
+        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
+        User-Agent: claude-sandbox/1.0
   - model_name: kimi-k2.7-code
     litellm_params:
-      model: openai/moonshotai/Kimi-K2.7-Code
-      api_base: https://api.commandcode.ai/provider/v1
-      api_key: os.environ/COMMANDCODE_API_KEY
+      model: openai/kimi-k2.7-code
+      api_base: https://opencode.ai/zen/go/v1
+      api_key: os.environ/OPENCODE_API_KEY
+      extra_headers:
+        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
+        User-Agent: claude-sandbox/1.0
 
   - model_name: ling-3.1-flash
     litellm_params:
-      model: openai/inclusionai/ling-3.1-flash:free
-      api_base: https://api.commandcode.ai/provider/v1
-      api_key: os.environ/COMMANDCODE_API_KEY
+      model: openai/ling-3.1-flash-free
+      api_base: https://opencode.ai/zen/v1
+      api_key: os.environ/OPENCODE_API_KEY
+      extra_headers:
+        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
+        User-Agent: claude-sandbox/1.0
 
-  # Claude models already speak /messages, so these pass straight through
   - model_name: claude-opus-5-5
     litellm_params:
       model: anthropic/claude-opus-5-5
-      api_base: https://api.commandcode.ai/provider
-      api_key: os.environ/COMMANDCODE_API_KEY
+      api_base: https://opencode.ai/zen
+      api_key: os.environ/OPENCODE_API_KEY
+      extra_headers:
+        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
+        User-Agent: claude-sandbox/1.0
   - model_name: claude-sonnet-5-5
     litellm_params:
-      model: anthropic/claude-sonnet-5-5
-      api_base: https://api.commandcode.ai/provider
-      api_key: os.environ/COMMANDCODE_API_KEY
+      model: anthropic/claude-sonnet-5
+      api_base: https://opencode.ai/zen
+      api_key: os.environ/OPENCODE_API_KEY
+      extra_headers:
+        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
+        User-Agent: claude-sandbox/1.0
 
 litellm_settings:
   drop_params: true
-  # Default bridges openai/* to /responses; Command Code only serves some models on /chat/completions
   use_chat_completions_url_for_anthropic_messages: true
 
 general_settings:
