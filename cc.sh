@@ -9,7 +9,10 @@ CALLER_PWD="$(pwd -P)"
 ZEN_BASE="https://opencode.ai/zen"
 GO_BASE="$ZEN_BASE/go/v1"
 
-compose() { docker compose --project-directory "$DIR" -f "$DIR/docker-compose.yml" "$@"; }
+compose() {
+  ensure_session_id
+  docker compose --project-directory "$DIR" -f "$DIR/docker-compose.yml" "$@"
+}
 
 usage() {
   cat <<EOF
@@ -67,6 +70,12 @@ set_key() {
   [ -n "$key" ] || { echo "No key entered." >&2; exit 1; }
   set_env_var OPENCODE_API_KEY "$key"
   echo "Saved to $ENV_FILE"
+}
+
+# OpenCode Go rejects requests without x-opencode-session. Each install gets its own id.
+ensure_session_id() {
+  [ -n "$(env_value OPENCODE_SESSION_ID)" ] ||
+    set_env_var OPENCODE_SESSION_ID "$(python3 -c 'import uuid; print(uuid.uuid4())')"
 }
 
 ensure_setup() {
@@ -174,19 +183,14 @@ case "$cmd" in
       echo "OpenCode does not serve '$id'. Run: $(basename "$0") available" >&2; exit 1
     fi
     python3 - "$CONFIG" "$alias" "$provider/$id" "$base" <<'EOF'
-import re, sys, uuid
+import sys
 path, alias, model, base = sys.argv[1:]
 text = open(path).read()
-session = re.search(r"x-opencode-session: (\S+)", text)
-session = session.group(1) if session else str(uuid.uuid4())
 entry = (f"  - model_name: {alias}\n"
          f"    litellm_params:\n"
+         f"      <<: *opencode\n"
          f"      model: {model}\n"
-         f"      api_base: {base}\n"
-         f"      api_key: os.environ/OPENCODE_API_KEY\n"
-         f"      extra_headers:\n"
-         f"        x-opencode-session: {session}\n"
-         f"        User-Agent: claude-sandbox/1.0\n")
+         f"      api_base: {base}\n")
 marker = "\nlitellm_settings:"
 head, tail = text.split(marker, 1)
 open(path, "w").write(head.rstrip("\n") + "\n" + entry + "\n" + marker.lstrip("\n") + tail)

@@ -7,6 +7,7 @@ services:
       - ./litellm/config.yaml:/app/config.yaml:ro
     environment:
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:?set OPENCODE_API_KEY in .env}
+      OPENCODE_SESSION_ID: ${OPENCODE_SESSION_ID:?set OPENCODE_SESSION_ID in .env (cc.sh generates it)}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
     ports:
       - "127.0.0.1:4000:4000"

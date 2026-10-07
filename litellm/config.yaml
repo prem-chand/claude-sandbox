@@ -1,77 +1,58 @@
-# Session overlay: OpenCode Go for coding models; Zen for Claude and Ling.
+# OpenCode Go for coding models, Zen for Claude and Ling.
 # Claude Code speaks Anthropic /v1/messages; LiteLLM translates to OpenCode.
 #
-# OpenCode Go requires x-opencode-session on the wire. Claude Code sends
-# X-Claude-Code-Session-Id, but LiteLLM's OpenAI client drops it, so Go
-# returns 400. Stamp a stable session id and a non-generic User-Agent here.
+# OpenCode Go requires x-opencode-session on the wire. LiteLLM's OpenAI client
+# drops Claude Code's X-Claude-Code-Session-Id, so every entry sends a
+# per-install id that cc.sh generates into .env.
+x-opencode: &opencode
+  api_key: os.environ/OPENCODE_API_KEY
+  extra_headers:
+    x-opencode-session: os.environ/OPENCODE_SESSION_ID
+    User-Agent: claude-sandbox/1.0
 
 model_list:
   - model_name: deepseek-v4-pro
     litellm_params:
+      <<: *opencode
       model: openai/deepseek-v4-pro
       api_base: https://opencode.ai/zen/go/v1
-      api_key: os.environ/OPENCODE_API_KEY
-      extra_headers:
-        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
-        User-Agent: claude-sandbox/1.0
   - model_name: deepseek-v4-flash
     litellm_params:
+      <<: *opencode
       model: openai/deepseek-v4-flash
       api_base: https://opencode.ai/zen/go/v1
-      api_key: os.environ/OPENCODE_API_KEY
-      extra_headers:
-        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
-        User-Agent: claude-sandbox/1.0
   - model_name: deepseek-v4.1-flash
     litellm_params:
+      <<: *opencode
       model: openai/deepseek-v4.1-flash
       api_base: https://opencode.ai/zen/go/v1
-      api_key: os.environ/OPENCODE_API_KEY
-      extra_headers:
-        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
-        User-Agent: claude-sandbox/1.0
   - model_name: kimi-k3
     litellm_params:
+      <<: *opencode
       model: openai/kimi-k3
       api_base: https://opencode.ai/zen/go/v1
-      api_key: os.environ/OPENCODE_API_KEY
-      extra_headers:
-        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
-        User-Agent: claude-sandbox/1.0
   - model_name: kimi-k2.7-code
     litellm_params:
+      <<: *opencode
       model: openai/kimi-k2.7-code
       api_base: https://opencode.ai/zen/go/v1
-      api_key: os.environ/OPENCODE_API_KEY
-      extra_headers:
-        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
-        User-Agent: claude-sandbox/1.0
 
   - model_name: ling-3.1-flash
     litellm_params:
+      <<: *opencode
       model: openai/ling-3.1-flash-free
       api_base: https://opencode.ai/zen/v1
-      api_key: os.environ/OPENCODE_API_KEY
-      extra_headers:
-        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
-        User-Agent: claude-sandbox/1.0
 
   - model_name: claude-opus-5-5
     litellm_params:
+      <<: *opencode
       model: anthropic/claude-opus-5-5
       api_base: https://opencode.ai/zen
-      api_key: os.environ/OPENCODE_API_KEY
-      extra_headers:
-        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
-        User-Agent: claude-sandbox/1.0
   - model_name: claude-sonnet-5-5
     litellm_params:
+      <<: *opencode
       model: anthropic/claude-sonnet-5
       api_base: https://opencode.ai/zen
-      api_key: os.environ/OPENCODE_API_KEY
-      extra_headers:
-        x-opencode-session: 61ed6b8c-fee4-4740-a7d7-77c9522dae2e
-        User-Agent: claude-sandbox/1.0
 
 litellm_settings:
   drop_params: true

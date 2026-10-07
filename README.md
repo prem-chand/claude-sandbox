@@ -74,17 +74,14 @@ The proxy runs as the `litellm` service in `docker-compose.yml`. It listens on `
 
 The LiteLLM image is pinned by digest in `docker-compose.yml` to the version this setup was tested with (1.104.0). `cc.sh update` does not change it. To upgrade, replace the digest and run `cc.sh test`.
 
-Its config is `litellm/config.yaml`. Each entry maps an alias that Claude Code uses to an OpenCode model:
+Its config is `litellm/config.yaml`. The `x-opencode` block at the top holds the API key and headers that all entries share. Each entry merges it with `<<: *opencode` and maps an alias that Claude Code uses to an OpenCode model:
 
 ```yaml
 - model_name: kimi-k3                     # the name you pass to cc.sh or /model
   litellm_params:
+    <<: *opencode                         # api_key and extra_headers
     model: openai/kimi-k3                 # provider prefix + OpenCode model ID
     api_base: https://opencode.ai/zen/go/v1
-    api_key: os.environ/OPENCODE_API_KEY
-    extra_headers:
-      x-opencode-session: <uuid>
-      User-Agent: claude-sandbox/1.0
 ```
 
 The prefix and `api_base` decide how the proxy calls OpenCode:
@@ -93,9 +90,9 @@ The prefix and `api_base` decide how the proxy calls OpenCode:
 - `openai/<id>` with `https://opencode.ai/zen/v1` for models only on Zen, such as `ling-3.1-flash-free`.
 - `anthropic/<id>` with `https://opencode.ai/zen` for the `claude-*` models. The proxy passes their requests through unchanged.
 
-`cc.sh add` picks the route for you. IDs that start with `claude-` get `anthropic/` on Zen. Other IDs go to Go when Go serves them, and to Zen if not. `add` stops when neither serves the ID. It also copies the `extra_headers` block from the existing entries.
+`cc.sh add` picks the route for you. IDs that start with `claude-` get `anthropic/` on Zen. Other IDs go to Go when Go serves them, and to Zen if not. `add` stops when neither serves the ID. New entries merge the shared `x-opencode` block.
 
-Every entry sets `extra_headers` (see [`400` missing `x-opencode-session`](#400-missing-x-opencode-session)).
+The shared block sets `extra_headers` (see [`400` missing `x-opencode-session`](#400-missing-x-opencode-session)).
 
 The setting `use_chat_completions_url_for_anthropic_messages: true` is required. Without it, LiteLLM sends `openai/` models to the `/responses` endpoint, which some models reject.
 
@@ -124,6 +121,7 @@ Docker Compose reads `.env` automatically. Copy it from `.env.example`.
 | --- | --- | --- | --- |
 | `OPENCODE_API_KEY` | Yes | | Your OpenCode key. Only the proxy gets it as an environment variable. |
 | `LITELLM_MASTER_KEY` | Yes | | Password Claude Code uses to talk to the proxy. Any string works. `cc.sh` generates one if it is missing. |
+| `OPENCODE_SESSION_ID` | Yes | | Value of the `x-opencode-session` header. `cc.sh` generates a UUID if it is empty. With plain `docker compose`, set it yourself, for example with `uuidgen`. |
 | `MAIN_MODEL` | No | `deepseek-v4-pro` | Model Claude Code starts with. |
 | `OPUS_MODEL` | No | `kimi-k3` | Model used when Claude Code asks for Opus. |
 | `SONNET_MODEL` | No | `deepseek-v4-pro` | Model used when Claude Code asks for Sonnet. |
@@ -219,12 +217,12 @@ Do not run `/plugin marketplace add` in this container. Remove leftover `*.clone
 
 OpenCode Go requires an `x-opencode-session` header on every request. Claude Code sends `X-Claude-Code-Session-Id`. LiteLLM calls Go as an OpenAI client and drops that header, so Go returns 400.
 
-Each entry in `litellm/config.yaml` sets this block, and `cc.sh add` copies it to new entries:
+The shared `x-opencode` block in `litellm/config.yaml` sends this header on every request:
 
 ```yaml
 extra_headers:
-  x-opencode-session: <stable-uuid>
+  x-opencode-session: os.environ/OPENCODE_SESSION_ID
   User-Agent: claude-sandbox/1.0
 ```
 
-A static id unblocks the 400. Go uses the id for routing and prompt cache. One id per conversation is better. This proxy does not map Claude's session header yet.
+`cc.sh` writes a new UUID to `OPENCODE_SESSION_ID` in `.env` the first time it runs, so each install has its own id. Go uses the id for routing and prompt cache. All conversations on one install share it. One id per conversation is better, but this proxy does not map Claude's session header yet.
