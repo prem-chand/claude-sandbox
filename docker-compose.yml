@@ -25,7 +25,8 @@ services:
       litellm:
         condition: service_healthy
     volumes:
-      - ${WORKSPACE:-.}:/home/node/workspace
+      # Unset WORKSPACE gives an empty volume, so this repo and its .env stay out
+      - ${WORKSPACE:-claude-workspace}:/home/node/workspace
       - claude-config:/home/node/.claude
     environment:
       ANTHROPIC_BASE_URL: http://litellm:4000
@@ -41,3 +42,4 @@ services:
 
 volumes:
   claude-config:
+  claude-workspace:
