@@ -1,0 +1,43 @@
+services:
+  litellm:
+    # Pinned to the image this setup was tested with (LiteLLM 1.104.0)
+    image: ghcr.io/berriai/litellm:main-stable@sha256:625981c83410a3ea68eb0697590a57ec1d764d634514d54fa5db0591077ee839
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    environment:
+      COMMANDCODE_API_KEY: ${COMMANDCODE_API_KEY:?set COMMANDCODE_API_KEY in .env}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+    ports:
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  claude:
+    build: .
+    image: claude-code
+    stdin_open: true
+    tty: true
+    depends_on:
+      litellm:
+        condition: service_healthy
+    volumes:
+      - ${WORKSPACE:-.}:/home/node/workspace
+      - claude-config:/home/node/.claude
+    environment:
+      ANTHROPIC_BASE_URL: http://litellm:4000
+      ANTHROPIC_AUTH_TOKEN: ${LITELLM_MASTER_KEY}
+      ANTHROPIC_MODEL: ${MAIN_MODEL:-deepseek-v4-pro}
+      ANTHROPIC_DEFAULT_OPUS_MODEL: ${OPUS_MODEL:-kimi-k3}
+      ANTHROPIC_DEFAULT_SONNET_MODEL: ${SONNET_MODEL:-deepseek-v4-pro}
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: ${HAIKU_MODEL:-deepseek-v4.1-flash}
+      CLAUDE_CODE_SUBAGENT_MODEL: ${SUBAGENT_MODEL:-deepseek-v4-pro}
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      # Keep .claude.json (onboarding, theme, trusted folders) inside the claude-config volume
+      CLAUDE_CONFIG_DIR: /home/node/.claude
+
+volumes:
+  claude-config:

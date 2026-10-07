@@ -1,0 +1,54 @@
+# Claude Code speaks the Anthropic /v1/messages API; LiteLLM translates it to
+# Command Code's OpenAI-style /chat/completions for the non-Claude models.
+model_list:
+  - model_name: deepseek-v4-pro
+    litellm_params:
+      model: openai/deepseek/deepseek-v4-pro
+      api_base: https://api.commandcode.ai/provider/v1
+      api_key: os.environ/COMMANDCODE_API_KEY
+  - model_name: deepseek-v4-flash
+    litellm_params:
+      model: openai/deepseek/deepseek-v4-flash
+      api_base: https://api.commandcode.ai/provider/v1
+      api_key: os.environ/COMMANDCODE_API_KEY
+  - model_name: deepseek-v4.1-flash
+    litellm_params:
+      model: openai/deepseek/deepseek-v4.1-flash
+      api_base: https://api.commandcode.ai/provider/v1
+      api_key: os.environ/COMMANDCODE_API_KEY
+  - model_name: kimi-k3
+    litellm_params:
+      model: openai/moonshotai/Kimi-K3
+      api_base: https://api.commandcode.ai/provider/v1
+      api_key: os.environ/COMMANDCODE_API_KEY
+  - model_name: kimi-k2.7-code
+    litellm_params:
+      model: openai/moonshotai/Kimi-K2.7-Code
+      api_base: https://api.commandcode.ai/provider/v1
+      api_key: os.environ/COMMANDCODE_API_KEY
+
+  - model_name: ling-3.1-flash
+    litellm_params:
+      model: openai/inclusionai/ling-3.1-flash:free
+      api_base: https://api.commandcode.ai/provider/v1
+      api_key: os.environ/COMMANDCODE_API_KEY
+
+  # Claude models already speak /messages, so these pass straight through
+  - model_name: claude-opus-5-5
+    litellm_params:
+      model: anthropic/claude-opus-5-5
+      api_base: https://api.commandcode.ai/provider
+      api_key: os.environ/COMMANDCODE_API_KEY
+  - model_name: claude-sonnet-5-5
+    litellm_params:
+      model: anthropic/claude-sonnet-5-5
+      api_base: https://api.commandcode.ai/provider
+      api_key: os.environ/COMMANDCODE_API_KEY
+
+litellm_settings:
+  drop_params: true
+  # Default bridges openai/* to /responses; Command Code only serves some models on /chat/completions
+  use_chat_completions_url_for_anthropic_messages: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
