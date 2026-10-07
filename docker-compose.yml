@@ -2,13 +2,15 @@ services:
   litellm:
     # Pinned to the image this setup was tested with (LiteLLM 1.104.0)
     image: ghcr.io/berriai/litellm:main-stable@sha256:625981c83410a3ea68eb0697590a57ec1d764d634514d54fa5db0591077ee839
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    command: ["--config", "/app/litellm/config.yaml", "--port", "4000"]
     volumes:
-      - ./litellm/config.yaml:/app/config.yaml:ro
+      # config.yaml loads client_auth.py from the same folder
+      - ./litellm:/app/litellm:ro
     environment:
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:?set OPENCODE_API_KEY in .env}
       OPENCODE_SESSION_ID: ${OPENCODE_SESSION_ID:?set OPENCODE_SESSION_ID in .env (cc.sh generates it)}
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      LITELLM_CLIENT_KEY: ${LITELLM_CLIENT_KEY:?set LITELLM_CLIENT_KEY in .env (cc.sh generates it)}
     ports:
       - "127.0.0.1:4000:4000"
     healthcheck:
@@ -35,7 +37,7 @@ services:
       - claude-config:/home/node/.claude
     environment:
       ANTHROPIC_BASE_URL: http://litellm:4000
-      ANTHROPIC_AUTH_TOKEN: ${LITELLM_MASTER_KEY}
+      ANTHROPIC_AUTH_TOKEN: ${LITELLM_CLIENT_KEY}
       ANTHROPIC_MODEL: ${MAIN_MODEL:-deepseek-v4-pro}
       ANTHROPIC_DEFAULT_OPUS_MODEL: ${OPUS_MODEL:-kimi-k3}
       ANTHROPIC_DEFAULT_SONNET_MODEL: ${SONNET_MODEL:-deepseek-v4-pro}

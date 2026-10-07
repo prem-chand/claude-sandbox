@@ -60,3 +60,4 @@ litellm_settings:
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+  custom_auth: client_auth.user_api_key_auth

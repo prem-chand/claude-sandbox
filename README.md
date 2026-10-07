@@ -74,6 +74,8 @@ The proxy runs as the `litellm` service in `docker-compose.yml`. It listens on `
 
 The LiteLLM image is pinned by digest in `docker-compose.yml` to the version this setup was tested with (1.104.0). `cc.sh update` does not change it. To upgrade, replace the digest and run `cc.sh test`.
 
+Claude Code authenticates with `LITELLM_CLIENT_KEY`, not the master key. The hook in `litellm/client_auth.py` lets that key call only `/v1/messages`, `/v1/messages/count_tokens` and `/v1/models`. Admin routes such as `/model/info`, `/key/generate` and `/config/update` return 403 for it. LiteLLM virtual keys would do the same job, but they need a Postgres database.
+
 Its config is `litellm/config.yaml`. The `x-opencode` block at the top holds the API key and headers that all entries share. Each entry merges it with `<<: *opencode` and maps an alias that Claude Code uses to an OpenCode model:
 
 ```yaml
@@ -120,7 +122,8 @@ Docker Compose reads `.env` automatically. Copy it from `.env.example`. `cc.sh` 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `OPENCODE_API_KEY` | Yes | | Your OpenCode key. Only the proxy gets it as an environment variable. |
-| `LITELLM_MASTER_KEY` | Yes | | Password Claude Code uses to talk to the proxy. Any string works. `cc.sh` generates one if it is missing. |
+| `LITELLM_MASTER_KEY` | Yes | | Full-access proxy password, for the host only. Any string works. `cc.sh` generates one if it is missing. |
+| `LITELLM_CLIENT_KEY` | Yes | | Proxy password Claude Code uses. It can only call the model routes. `cc.sh` generates one if it is missing. |
 | `OPENCODE_SESSION_ID` | Yes | | Value of the `x-opencode-session` header. `cc.sh` generates a UUID if it is empty. With plain `docker compose`, set it yourself, for example with `uuidgen`. |
 | `MAIN_MODEL` | No | `deepseek-v4-pro` | Model Claude Code starts with. |
 | `OPUS_MODEL` | No | `kimi-k3` | Model used when Claude Code asks for Opus. |
@@ -158,6 +161,7 @@ docker run -it --rm \
 | `Dockerfile` | `claude-code` image: Node 22, Claude Code CLI, git, ripgrep, jq. Runs as the non-root `node` user, with your uid on Linux. |
 | `docker-compose.yml` | The `litellm` proxy and `claude` services. |
 | `litellm/config.yaml` | Proxy model list and settings. |
+| `litellm/client_auth.py` | Proxy auth hook. It limits `LITELLM_CLIENT_KEY` to the model routes. |
 | `.env.example` | Template for `.env`. |
 | `commandcode.env.example`, `deepseek.env.example` | Templates for running without the proxy. |
 

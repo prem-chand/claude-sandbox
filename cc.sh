@@ -15,7 +15,7 @@ fi
 GO_BASE="$ZEN_BASE/go/v1"
 
 compose() {
-  ensure_session_id
+  ensure_local_secrets
   docker compose --project-directory "$DIR" -f "$DIR/docker-compose.yml" "$@"
 }
 
@@ -79,20 +79,26 @@ set_key() {
   echo "Saved to $ENV_FILE"
 }
 
-# OpenCode Go rejects requests without x-opencode-session. Each install gets its own id.
-ensure_session_id() {
+random_key() { echo "sk-local-$(head -c12 /dev/urandom | od -An -tx1 | tr -d ' \n')"; }
+
+# Values compose needs that are local to this install. Generated once, then kept.
+#   OPENCODE_SESSION_ID  x-opencode-session header; OpenCode Go rejects requests without it
+#   LITELLM_MASTER_KEY   full proxy access, for the host only
+#   LITELLM_CLIENT_KEY   model routes only, for the claude container (litellm/client_auth.py)
+ensure_local_secrets() {
   [ -n "$(env_value OPENCODE_SESSION_ID)" ] ||
     set_env_var OPENCODE_SESSION_ID "$(python3 -c 'import uuid; print(uuid.uuid4())')"
+  local master; master="$(env_value LITELLM_MASTER_KEY)"
+  if [ -z "$master" ] || [ "$master" = sk-local-change-me ]; then
+    set_env_var LITELLM_MASTER_KEY "$(random_key)"
+  fi
+  [ -n "$(env_value LITELLM_CLIENT_KEY)" ] || set_env_var LITELLM_CLIENT_KEY "$(random_key)"
 }
 
 ensure_setup() {
   local key; key="$(env_value OPENCODE_API_KEY)"
   if [ -z "$key" ] || [ "$key" = your-opencode-key ]; then
     set_key
-  fi
-  local master; master="$(env_value LITELLM_MASTER_KEY)"
-  if [ -z "$master" ] || [ "$master" = sk-local-change-me ]; then
-    set_env_var LITELLM_MASTER_KEY "sk-local-$(head -c12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   fi
   local built
   built="$(docker image inspect -f '{{index .Config.Labels "claude-sandbox.uid"}}' claude-code 2>/dev/null || true)"
